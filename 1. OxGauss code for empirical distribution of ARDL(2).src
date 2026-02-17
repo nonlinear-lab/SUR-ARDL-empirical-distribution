@@ -1,0 +1,160 @@
+@ ==============================================================@
+@ OxGauss program for ARDL		        @ 
+@ ============================================================= @
+@ Input:      		y: Tx1 vector of time series        	@
+@ Output:    		ARDL distribution	@
+@ Subprogram: 		none					@
+@ Lag length:		1					@
+@ ==============================================================@
+
+closeall;
+
+output file=ardl_distribution_out(b).txt reset;
+
+@ =====data generating process (DGP)===================@
+nr=5000;
+
+rhom={0,1};
+@ thetam={0,1,0.95,0.90}; @
+nnm={30,50,80,100,150,200};
+sbm={0.125,0.375,0.625,0.875};
+
+mout1=zeros(rows(nnm),7);
+
+nn1=1;
+do while nn1<=rows(nnm);
+nn=nnm[nn1]; 
+
+"Number of observation+++" nn;
+
+@ r1=1; @
+r1=2;
+do while r1<=rows(rhom);
+rho1=rhom[r1];
+
+"rho++++++++++++++++++" rho1;
+  
+ardl1=zeros(nr,1);
+
+i=1;
+do while i <=nr;
+
+e=zeros(nn,1);
+y=zeros(nn,1);
+e1=rndn(nn,1); 
+e2=rndn(nn,1); 
+e3=rndn(nn,1); 
+e4=rndn(nn,1); 
+
+num_obs=nn;
+mu=0;
+@sigma=0.0000001;@
+sigma=1;
+/*x=rndLogNorm(num_obs,1,mu,sigma); 
+e2=rndn(nn,1)*sigma;*/
+
+y000=zeros(nn,1);
+y001=zeros(nn,1);
+y002=zeros(nn,1);
+trend0=seqa(1,1,nn);
+const0=ones(nn,1);
+rr1=zeros(nn,1);
+rr2=zeros(nn,1);
+rr3=zeros(nn,1);
+rr4=zeros(nn,1);
+
+mc=1;
+do while mc<=nn;
+    if mc==1;
+    y000[mc,1]=0;
+    y001[mc,1]=0;
+    y002[mc,1]=0;
+    rr1[mc,1]=0;
+    rr2[mc,1]=0;
+    rr3[mc,1]=0;
+    rr4[mc,1]=0;
+    else;        
+    rr1[mc,1]=rho1*rr1[mc-1]+e1[mc];
+    rr2[mc,1]=rho1*rr2[mc-1]+e2[mc];
+    rr3[mc,1]=rho1*rr3[mc-1]+e3[mc];
+    rr4[mc,1]=rho1*rr4[mc-1]+e4[mc];        
+    y000[mc,1]=rr1[mc,1]+const0[mc,1]+trend0[mc,1]+e1[mc,1]; 
+    y001[mc,1]=rho1*y001[mc-1,1]+const0[mc,1]+e1[mc,1];
+    y002[mc,1]=rho1*y001[mc-1,1]+e1[mc,1];
+    endif;
+mc=mc+1;
+endo;
+
+y0=rr1;
+x1=rr2;
+x2=rr3;
+x3=rr4;
+
+@ =====ARDL estimation ============================================ @
+k=1;
+LL=1;
+y=y0;
+n=rows(y);
+dy1=y0[2:n]-y0[1:n-1];
+dx1=x1[2:n]-x1[1:n-1];
+dx2=x2[2:n]-x2[1:n-1];
+dx3=x3[2:n]-x3[1:n-1];
+const=ones(n,1);
+trend=seqa(1,1,n);
+x=dx1[k:n-1]~dx2[k:n-1]~dx3[k:n-1]~const[k+1:n]~trend[k+1:n]~y0[k:n-1]~x1[k:n-1]~x2[k:n-1]~x3[k:n-1];
+x1=dx1[k:n-1]~dx2[k:n-1]~dx3[k:n-1]~const[k+1:n];
+y=dy1[k:n-1];
+invx=inv(x'x);
+beta=invx*x'y;
+e=y-x*beta;
+ee=e'e;
+    invx1=inv(x1'x1);
+    beta1=invx1*x1'y;
+    e1=y-x1*beta1;
+    ee1=e1'e1;
+    f_num=(ee1-ee)/(cols(x)-cols(x1));
+    f_den=ee/(rows(y)-cols(x));
+    ff=f_num/f_den;
+ssr=e'e;
+var=(e'e/(rows(y)-cols(x)))*invx;
+sd=sqrt(diag(var));
+t=beta./sd;
+
+ardl1[i,1]=ff;
+
+i=i+1;
+endo;
+
+s_adfm=sortc(ardl1,1);
+cv_adfm_1=s_adfm[int(0.01*nr)];
+cv_adfm_5=s_adfm[int(0.05*nr)];
+cv_adfm_10=s_adfm[int(0.10*nr)];
+cv_adfm_50=s_adfm[int(0.50*nr)];
+cv_adfm_90=s_adfm[int(0.90*nr)];
+cv_adfm_95=s_adfm[int(0.95*nr)];
+cv_adfm_99=s_adfm[int(0.99*nr)];
+
+"cv_ardlm_1=" cv_adfm_1;
+"cv_ardlm_5=" cv_adfm_5;
+"cv_ardlm_10=" cv_adfm_10;
+"cv_ardlm_50=" cv_adfm_50;
+"cv_ardlm_90=" cv_adfm_90;
+"cv_ardlm_95=" cv_adfm_95;
+"cv_ardlm_99=" cv_adfm_99;
+
+mout1[nn1,1]=cv_adfm_1;
+mout1[nn1,2]=cv_adfm_5;
+mout1[nn1,3]=cv_adfm_10;
+mout1[nn1,4]=cv_adfm_50;
+mout1[nn1,5]=cv_adfm_90;
+mout1[nn1,6]=cv_adfm_95;
+mout1[nn1,7]=cv_adfm_99;
+
+r1=r1+1;
+endo;
+
+nn1=nn1+1;
+endo;
+
+"mout1=" mout1;
+@ =====End of calculation================================================	@
